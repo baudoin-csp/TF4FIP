@@ -11,6 +11,7 @@ from chronos_model.chronos_prediction import make_prediction as chronos_pred
 from moirai_model.moirai_prediction import make_prediction as moirai_pred
 from time_moe_model.time_moe_prediction import make_prediction as timemoe_pred
 from transformers import AutoModelForCausalLM
+from uni2ts.model.moirai import MoiraiForecast, MoiraiModule
 
 # python -m pipeline --path "../data/data_2024_2025.csv" --input_column "Close_denoised" --output_column "Close" --prediction_length 3 --context_length 384 --frequency "H" --utc True --output "data_2024_2025_chronos.csv" --model_name "chronos"
 
@@ -194,7 +195,6 @@ def main(args):
     all_results = []
     for context_df, ground_truth_df, forecast, idx in results:
         # `forecast` here is either a NumPy array or a dict with median/quartiles
-        print("forecast values: ", forecast)
         if isinstance(forecast, dict):
             logging.error("The median_quartile approach may contain errors.")
             if "median" in forecast:

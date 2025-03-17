@@ -77,13 +77,17 @@ def make_prediction(context_list, model, args):
             past_is_pad=batch_pads,
         )
 
+    print("forecast shape", forecast.shape)
+
     # The first element in `forecast` is the array of generated samples
     # shape: (batch_size, num_samples, prediction_length)
-    forecast_samples = forecast[0].cpu().numpy()
+    forecast_samples = forecast.cpu().numpy()
 
     # ---- De-standardize and post-process each forecast in the batch ----
     all_forecasts = []
-    for i in range(forecast_samples.shape[0]):
+
+
+    for i in range(forecast_samples.shape[0]): # i in [0..batch_size-1]
         # forecast for i-th sample => shape (num_samples, prediction_length)
         item_forecast = forecast_samples[i]
         mean_val, std_val = means_stds[i]
