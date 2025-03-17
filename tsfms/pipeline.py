@@ -64,6 +64,7 @@ def sliding_window(df, context_length, prediction_length):
         context_end = start_idx + context_length  # end of the context window
         pred_end = context_end + prediction_length  # end of the prediction window
 
+        
         context_df = df.iloc[start_idx:context_end]
         ground_truth_df = df.iloc[context_end:pred_end]
 
