@@ -114,7 +114,7 @@ def process_sliding_windows(df, args, predict_func, model, batch_size=64):
             logging.info(
                 f"Incremental backup saved at {current_count} windows (batched)."
             )
-            
+
     return results
 
 
@@ -171,6 +171,7 @@ def main(args):
             feat_dynamic_real_dim=0,
             past_feat_dynamic_real_dim=0,
         )
+        model = model.to(device) 
     elif args.model_name == "chronos":
         model = BaseChronosPipeline.from_pretrained(
             "amazon/chronos-bolt-small",
