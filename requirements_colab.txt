@@ -1,0 +1,6 @@
+numpy==1.26.4
+pandas==2.1.4
+torch==2.4.1
+chronos-forecasting==1.4.1
+einops==0.7.0 # for moirai
+transformers==4.40.1 # for time_moe
