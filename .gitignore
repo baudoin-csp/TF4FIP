@@ -9,3 +9,7 @@ __pycache__/
 venv/
 /uni2ts
 *.zip
+*.csv
+*.png
+*.xlsx
+

@@ -205,6 +205,11 @@ def main(args):
                 raise ValueError("Unknown format for 'forecast' dictionary.")
         else:
             final_predictions = forecast
+        
+        if isinstance(final_predictions, (np.ndarray, torch.Tensor)):
+            final_predictions = final_predictions.tolist()
+        else:
+            logging.warning(f"Unexpected type for final_predictions: {type(final_predictions)}")
 
         # Compute APE, SIGN, etc.
         real_values = ground_truth_df[args.output_column].values
