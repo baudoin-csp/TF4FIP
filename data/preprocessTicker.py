@@ -1,10 +1,13 @@
-import numpy as np
-import pywt
-import sys
 import argparse
-import pandas as pd
+import ast
+import sys
 
-def wavelet_denoise(df, wavelet='db1', level=1):
+import numpy as np
+import pandas as pd
+import pywt
+
+
+def wavelet_denoise(df, wavelet="db1", level=1):
     """
     Apply wavelet denoising to all numeric columns of a Pandas DataFrame.
 
@@ -16,12 +19,15 @@ def wavelet_denoise(df, wavelet='db1', level=1):
     Returns:
     - A DataFrame with denoised data.
     """
+
     def denoise_column(column):
         coeffs = pywt.wavedec(column, wavelet, level=level)
-        sigma = np.median(np.abs(coeffs[-level])) / 0.6745 
+        sigma = np.median(np.abs(coeffs[-level])) / 0.6745
         threshold = sigma * np.sqrt(2 * np.log(len(column)))
-        denoised_coeffs = [pywt.threshold(c, threshold) if i > 0 else c for i, c in enumerate(coeffs)]
-        return pywt.waverec(denoised_coeffs, wavelet)[:len(column)]
+        denoised_coeffs = [
+            pywt.threshold(c, threshold) if i > 0 else c for i, c in enumerate(coeffs)
+        ]
+        return pywt.waverec(denoised_coeffs, wavelet)[: len(column)]
 
     denoised_data = {}
     for col in df.select_dtypes(include=[np.number]).columns:
@@ -33,20 +39,14 @@ def wavelet_denoise(df, wavelet='db1', level=1):
 
     return denoised_df
 
-def preprocess(df, dfDaily=None):
-    
-    # Force datetime conversion with `utc=True` for compatibility
-    df.index = pd.to_datetime(df.index, utc=True, errors='coerce')
 
-    # Convert to US/Eastern for local timezone analysis
-    df.index = df.index.tz_convert('US/Eastern')
+def preprocess(df, dfDaily=None):
 
     # Forward fill for weekends
-    print("size before: ", len(df))
-    df = df.asfreq('h')
-    print("size after as freq: ", len(df))
+    df = df.asfreq("h")
     df = df.interpolate(method="time")
-    print("size after interpolate: ", len(df))
+
+   
 
     # Create additional time-based features
     df["Week"] = df.index.isocalendar().week
@@ -59,37 +59,43 @@ def preprocess(df, dfDaily=None):
         return df
 
     def atr(df, column, span, lag):
-        df['Prev Close'] = df['Close'].shift(lag)
-        high_low = df['High'] - df['Low']
-        high_prev_close = (df['High'] - df['Prev Close']).abs()
-        low_prev_close = (df['Low'] - df['Prev Close']).abs()
-        df['True Range'] = high_low.combine(high_prev_close, max).combine(low_prev_close, max)
-        df[f'ATR_{span}'] = df['True Range'].rolling(window=span).mean()
-        df[f'ATR_{span}'] = df[f'ATR_{span}'] / df['Close']
+        df["Prev Close"] = df["Close"].shift(lag)
+        high_low = df["High"] - df["Low"]
+        high_prev_close = (df["High"] - df["Prev Close"]).abs()
+        low_prev_close = (df["Low"] - df["Prev Close"]).abs()
+        df["True Range"] = high_low.combine(high_prev_close, max).combine(
+            low_prev_close, max
+        )
+        df[f"ATR_{span}"] = df["True Range"].rolling(window=span).mean()
+        df[f"ATR_{span}"] = df[f"ATR_{span}"] / df["Close"]
         return df
 
     def rsi(df, column, span, lag):
-        df['Price Change'] = df['Close'].diff()
-        df['Gain'] = df['Price Change'].apply(lambda x: x if x > 0 else 0)
-        df['Loss'] = df['Price Change'].apply(lambda x: -x if x < 0 else 0)
-        df['Avg Gain'] = df['Gain'].rolling(window=span, min_periods=lag).mean()
-        df['Avg Loss'] = df['Loss'].rolling(window=span, min_periods=lag).mean()
+        df["Price Change"] = df["Close"].diff()
+        df["Gain"] = df["Price Change"].apply(lambda x: x if x > 0 else 0)
+        df["Loss"] = df["Price Change"].apply(lambda x: -x if x < 0 else 0)
+        df["Avg Gain"] = df["Gain"].rolling(window=span, min_periods=lag).mean()
+        df["Avg Loss"] = df["Loss"].rolling(window=span, min_periods=lag).mean()
 
-        df['RS'] = df['Avg Gain'] / df['Avg Loss']
+        df["RS"] = df["Avg Gain"] / df["Avg Loss"]
 
-        df['RSI'] = 100 - (100 / (1 + df['RS']))
+        df["RSI"] = 100 - (100 / (1 + df["RS"]))
         return df
 
     def distancesToMM(df, column, spans):
         for span in spans:
-            df[f'MM_{span}'] = df['Close'].rolling(window=span).mean()
-            df[f'DistanceToMM{span}'] = ((df["Close"] - df[f'MM_{span}']) / df[f'MM_{span}']) * 100
+            df[f"MM_{span}"] = df["Close"].rolling(window=span).mean()
+            df[f"DistanceToMM{span}"] = (
+                (df["Close"] - df[f"MM_{span}"]) / df[f"MM_{span}"]
+            ) * 100
         return df
 
     def distancesToEMM(df, column, spans):
         for span in spans:
-            df[f'EMM_{span}'] = df['Close'].ewm(span=span, adjust=False).mean()
-            df[f'DistanceToEMM{span}'] = ((df["Close"] - df[f'EMM_{span}']) / df[f'EMM_{span}']) * 100
+            df[f"EMM_{span}"] = df["Close"].ewm(span=span, adjust=False).mean()
+            df[f"DistanceToEMM{span}"] = (
+                (df["Close"] - df[f"EMM_{span}"]) / df[f"EMM_{span}"]
+            ) * 100
         return df
 
     df = emroc(df, "Close", 72, 2)
@@ -100,7 +106,7 @@ def preprocess(df, dfDaily=None):
         dfDaily.drop(["Date"], axis=1, inplace=True)
         dfDaily.set_index("Datetime", inplace=True)
 
-        dfDaily = dfDaily.asfreq('D')
+        dfDaily = dfDaily.asfreq("D")
         dfDaily = dfDaily.interpolate(method="time")
 
         dfDaily = atr(dfDaily, "Close", 10, 1)
@@ -124,26 +130,46 @@ def preprocess(df, dfDaily=None):
 
         def progress_bar(completion, total):
             percent = (completion / total) * 100
-            bar = '*' * int(percent // 2)
-            bar = bar.ljust(50, ' ')
+            bar = "*" * int(percent // 2)
+            bar = bar.ljust(50, " ")
             if completion == total:
                 sys.stdout.write(f"\r[{bar}] 1 of 1 completed\n")
             else:
                 sys.stdout.write(f"\r[{bar}] {percent:.0f}%")
             sys.stdout.flush()
+
         while row_idx < len(df):
             if row_idx >= curr * step:
                 progress_bar(curr, 100)
                 curr += 1
 
-            if (df.index[row_idx].dayofweek == dfDaily.index[rowDaily_idx].dayofweek and df.index[row_idx].hour >= 17) or ((df.index[row_idx].dayofweek-1)%7 == dfDaily.index[rowDaily_idx].dayofweek and df.index[row_idx].hour < 17):
+            if (
+                df.index[row_idx].dayofweek == dfDaily.index[rowDaily_idx].dayofweek
+                and df.index[row_idx].hour >= 17
+            ) or (
+                (df.index[row_idx].dayofweek - 1) % 7
+                == dfDaily.index[rowDaily_idx].dayofweek
+                and df.index[row_idx].hour < 17
+            ):
                 # Set values for columns VolumeDiff, CloseDiff, ATR10, MM20, MM60 using .loc
-                df.loc[df.index[row_idx], "ATR_10"] = dfDaily.loc[dfDaily.index[rowDaily_idx], "ATR_10"]
-                df.loc[df.index[row_idx], "MM_20"] = dfDaily.loc[dfDaily.index[rowDaily_idx], "MM_20"]
-                df.loc[df.index[row_idx], "MM_60"] = dfDaily.loc[dfDaily.index[rowDaily_idx], "MM_60"]
-                df.loc[df.index[row_idx], "EMM_20"] = dfDaily.loc[dfDaily.index[rowDaily_idx], "EMM_20"]
-                df.loc[df.index[row_idx], "EMM_60"] = dfDaily.loc[dfDaily.index[rowDaily_idx], "EMM_60"]
-                df.loc[df.index[row_idx], "RSI"] = dfDaily.loc[dfDaily.index[rowDaily_idx], "RSI"]
+                df.loc[df.index[row_idx], "ATR_10"] = dfDaily.loc[
+                    dfDaily.index[rowDaily_idx], "ATR_10"
+                ]
+                df.loc[df.index[row_idx], "MM_20"] = dfDaily.loc[
+                    dfDaily.index[rowDaily_idx], "MM_20"
+                ]
+                df.loc[df.index[row_idx], "MM_60"] = dfDaily.loc[
+                    dfDaily.index[rowDaily_idx], "MM_60"
+                ]
+                df.loc[df.index[row_idx], "EMM_20"] = dfDaily.loc[
+                    dfDaily.index[rowDaily_idx], "EMM_20"
+                ]
+                df.loc[df.index[row_idx], "EMM_60"] = dfDaily.loc[
+                    dfDaily.index[rowDaily_idx], "EMM_60"
+                ]
+                df.loc[df.index[row_idx], "RSI"] = dfDaily.loc[
+                    dfDaily.index[rowDaily_idx], "RSI"
+                ]
 
                 row_idx += 1
             else:
@@ -160,22 +186,35 @@ def preprocess(df, dfDaily=None):
     else:
         df["Close_denoised"] = wavelet_denoise(df.copy())["Close"]
         return df
-  
+
+
 def main():
-    parser = argparse.ArgumentParser(description='Preprocess financial data with configurable parameters.')
-    parser.add_argument('--input_path', help='Path to input CSV file')
-    parser.add_argument('--daily_input', help='Path to daily data CSV file', default=None)
-    parser.add_argument('--output_path', help='Path to save processed data', default='processed_data.csv')
-    
+    parser = argparse.ArgumentParser(
+        description="Preprocess financial data with configurable parameters."
+    )
+    parser.add_argument("--input_path", help="Path to input CSV file")
+    parser.add_argument(
+        "--daily_input", help="Path to daily data CSV file", default=None
+    )
+    parser.add_argument(
+        "--output_path",
+        help="Path to save processed data",
+        default="processed_data.csv",
+    )
+
     args = parser.parse_args()
 
     try:
-        df = pd.read_csv(args.input_path, index_col=0)
-        daily_df = pd.read_csv(args.daily_input, index_col=0) if args.daily_input else None
+        df = pd.read_csv(args.input_path, parse_dates=["Datetime"])
+        df.set_index("Datetime", inplace=True)
+
+        daily_df = (
+            pd.read_csv(args.daily_input, index_col=0) if args.daily_input else None
+        )
     except Exception as e:
         print(f"Error loading data: {e}")
         sys.exit(1)
-    
+
     try:
         processed_df = preprocess(df, daily_df)
         processed_df.to_csv(args.output_path)
@@ -183,6 +222,7 @@ def main():
     except Exception as e:
         print(f"Error during processing: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

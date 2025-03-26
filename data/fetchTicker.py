@@ -15,9 +15,9 @@ def fetch(ticker="ES=F", frequency="1h", session_start=None, session_end=None):
         prepost=True,
     )
 
-    data.index = data.index.tz_convert('US/Eastern')
+    data.index = data.index.tz_convert("America/Chicago")
     data.columns = data.columns.droplevel("Ticker")
-    # Reset index to get a clean DataFrame
+    # Reset index to obtain index values instead of only dates
     data.reset_index(inplace=True)
     return data
 
@@ -52,5 +52,4 @@ if __name__ == "__main__":
         session_start=args.session_start,
         session_end=args.session_end,
     )
-    df.columns = df.columns.droplevel("Ticker")
     df.to_csv(args.output_path)

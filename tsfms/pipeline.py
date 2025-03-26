@@ -12,8 +12,9 @@ from moirai_model.moirai_prediction import make_prediction as moirai_pred
 from time_moe_model.time_moe_prediction import make_prediction as timemoe_pred
 from transformers import AutoModelForCausalLM
 from uni2ts.model.moirai import MoiraiForecast, MoiraiModule
+import ast
 
-# python -m pipeline --path "../data/data_2024_2025.csv" --input_column "Close_denoised" --output_column "Close" --prediction_length 3 --context_length 384 --frequency "H" --utc True --output "data_2024_2025_chronos.csv" --model_name "chronos"
+# python -m pipeline --path "../data/data_2023_2025_preprocessed.csv" --input_column "Close_denoised" --output_column "Close" --prediction_length 3 --context_length 384 --frequency "H" --utc True --output "data_2023_2025_final.csv" --model_name "chronos"
 
 ###############################################################################
 # Common utility functions
@@ -27,6 +28,53 @@ def setup_logging():
         handlers=[logging.FileHandler("forecast_app.log"), logging.StreamHandler()],
     )
 
+
+def helper_metric(df):
+    context_length = 384
+    context_length_index = context_length - 1
+    prediction_length = 3
+
+    # TP: True Positive, TN: True Negative, FP: False Positive, FN: False Negative
+    df["TP"] = 0
+    df["TN"] = 0
+    df["FP"] = 0
+    df["FN"] = 0
+
+    # We take the first 384 rows as context. We start predicting from the 385th row
+    first_predicted_row = context_length_index
+    last_predicted_row = len(df) - prediction_length
+    
+    for index, row in df[first_predicted_row:last_predicted_row].iterrows():
+        base_price = row['Close']
+        future_predictions = ast.literal_eval(row["Result"])
+        future_prices = df.loc[index:].iloc[1:prediction_length+1]["Close"].tolist() # get the next prediction_length values corresponding to the next prediction_length horizons
+        real_difference_signs = [np.sign(price - base_price) for price in future_prices]
+        predicted_difference_signs = [np.sign(prediction - base_price) for prediction in future_predictions]
+
+        TP = [0 for _ in range(prediction_length)]
+        TN = [0 for _ in range(prediction_length)]
+        FP = [0 for _ in range(prediction_length)]
+        FN = [0 for _ in range(prediction_length)]
+
+        # Compute the TP, TN, FP, FN for each horizon
+        for horizon_index, (real_difference_sign, predicted_difference_sign) in enumerate(zip(real_difference_signs, predicted_difference_signs)):
+            if real_difference_sign == predicted_difference_sign and real_difference_sign == 1:
+                TP[horizon_index] += 1
+            elif real_difference_sign == predicted_difference_sign and real_difference_sign == -1:
+                TN[horizon_index] += 1
+            elif real_difference_sign != predicted_difference_sign and real_difference_sign == 1:
+                FN[horizon_index] += 1
+            elif real_difference_sign != predicted_difference_sign and real_difference_sign == -1:
+                FP[horizon_index] += 1
+
+        # fill the column for TP, TN, FP, FN for the current row
+        df.at[index, "TP"] = str(TP)
+        df.at[index, "TN"] = str(TN)
+        df.at[index, "FP"] = str(FP)
+        df.at[index, "FN"] = str(FN)
+        
+   
+    return df
 
 def load_data(file_path, input_column, output_column):
     """Load the data from the CSV file and verify the required columns exist."""
@@ -252,13 +300,15 @@ def main(args):
 
     # Merge with original df
     final_df = pd.concat([df, results_df], axis=1)
-
+    final_df = helper_metric(final_df.copy())
     # Save to CSV
     output_path = (
         args.output
         or f"new_results_{args.model_name}_{args.path[:-4]}_{args.context_length}.csv"
     )
+    
     final_df.to_csv(output_path, index=True)
+
 
     logging.info(f"Results saved to {output_path}")
     logging.info("Forecasting process completed.")
