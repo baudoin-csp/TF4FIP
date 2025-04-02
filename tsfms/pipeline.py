@@ -46,7 +46,10 @@ def helper_metric(df):
     
     for index, row in df[first_predicted_row:last_predicted_row].iterrows():
         base_price = row['Close']
-        future_predictions = ast.literal_eval(row["Result"])
+        if isinstance(row["Result"], str):
+            future_predictions = ast.literal_eval(row["Result"])
+        else:
+            future_predictions = row["Result"]
         future_prices = df.loc[index:].iloc[1:prediction_length+1]["Close"].tolist() # get the next prediction_length values corresponding to the next prediction_length horizons
         real_difference_signs = [np.sign(price - base_price) for price in future_prices]
         predicted_difference_signs = [np.sign(prediction - base_price) for prediction in future_predictions]
@@ -234,9 +237,19 @@ def main(args):
 
     # Start predicition in batches
     logging.info("Starting sliding window predictions...")
-    results = process_sliding_windows(
-        df=df, args=args, model=model, predict_func=predict_func, batch_size=64
-    )
+    
+    results = None
+    backup_path = "results_backup_incremental.pkl"
+    if os.path.exists(backup_path):
+        logging.info("Found backup file. Loading saved results to skip recomputation...")
+        with open(backup_path, "rb") as f:
+            results = pickle.load(f)
+    else:
+        logging.info("No backup found. Running full sliding window predictions...")
+        results = process_sliding_windows(
+            df=df, args=args, model=model, predict_func=predict_func, batch_size=64
+        )
+
     logging.info(
         f"Batched sliding window processing finished. {len(results)} windows found."
     )
