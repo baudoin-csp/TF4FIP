@@ -48,9 +48,7 @@ def make_prediction(context_list, model, args):
 
         # De-standardize each forecast in the batch
         # We iterate along the batch dimension of forecast_standardized
-    
 
-    
     for i, forecast_tensor in enumerate(forecast_standardized):
         mean_val, std_val = means_stds[i]
         
@@ -58,27 +56,27 @@ def make_prediction(context_list, model, args):
         forecast_np = forecast_np * std_val + mean_val
 
 
+        
+        std_forecast_np = forecast_np.std(axis=0) # shape: (prediction_length,)
+        diff_q0_q8 = forecast_np[0] - forecast_np[8] # shape: (prediction_length,). We have the difference between the first and last quantile for H=1, H=2 and H=3
+        diff_q6_q2 = forecast_np[6] - forecast_np[2]
+        diff_q5_q3 = forecast_np[5] - forecast_np[3]
+
         # Select quantile index 4 (assumed median quantile)
-        chosen_quantile_index = 4
-        quantile_4_result = forecast_np[chosen_quantile_index] # Here we take the median (5th quantile) as the final result
+        quantile_for_prediction = 4
+
+        median = forecast_np[quantile_for_prediction] # Here we take the median (5th quantile) as the final result
         
         # Now handle the 'return_type'
         if args.return_type == "median":
-            final_result = quantile_4_result
-        elif args.return_type == "median_quartile":
-            median = np.median(forecast_np, axis=0)
-            q1 = np.percentile(forecast_np, 25, axis=0)
-            q3 = np.percentile(forecast_np, 75, axis=0)
-            final_result = {
-                "median": np.round(median, decimals=4),
-                "q1": np.round(q1, decimals=4),
-                "q3": np.round(q3, decimals=4),
-            }
+            final_result = {"median": median, 
+                            "std": std_forecast_np,
+                            "diff_q0_q8": diff_q0_q8,
+                            "diff_q6_q2": diff_q6_q2,
+                            "diff_q5_q3": diff_q5_q3}
         else:
             raise ValueError(f"Unknown return_type: {args.return_type}")
 
         all_forecasts.append(final_result)
 
     return all_forecasts
-
-

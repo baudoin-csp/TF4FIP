@@ -258,14 +258,16 @@ def main(args):
     all_results = []
     for context_df, ground_truth_df, forecast, idx in results:
         # `forecast` here is either a NumPy array or a dict with median/quartiles
-        if isinstance(forecast, dict):
-            logging.error("The median_quartile approach may contain errors.")
-            if "median" in forecast:
-                final_predictions = forecast["median"]
-            else:
-                raise ValueError("Unknown format for 'forecast' dictionary.")
-        else:
-            final_predictions = forecast
+
+        row_dict = {}
+
+        final_predictions = forecast["median"]
+        if args.model_name == "chronos":
+            row_dict["std"] = forecast["std"]
+            row_dict["diff_q0_q8"] = forecast["diff_q0_q8"]
+            row_dict["diff_q6_q2"] = forecast["diff_q6_q2"]
+            row_dict["diff_q5_q3"] = forecast["diff_q5_q3"]
+
         
         if isinstance(final_predictions, (np.ndarray, torch.Tensor)):
             final_predictions = final_predictions.tolist()
@@ -294,15 +296,13 @@ def main(args):
 
         SCORE = [a * s for a, s in zip(APE, SIGN)]
 
-        all_results.append(
-            {
-                "context_end": context_df.index[-1],
-                "score": SCORE,
-                "APE": APE,
-                "SIGN": SIGN,
-                "Result": final_predictions,
-            }
-        )
+        row_dict["context_end"] = context_df.index[-1]
+        row_dict["score"] = SCORE
+        row_dict["APE"] = APE
+        row_dict["SIGN"] = SIGN
+        row_dict["Result"] = final_predictions
+
+        all_results.append(row_dict)
 
     # 6. Convert to a dataframe and write out
     results_df = pd.DataFrame(all_results)
