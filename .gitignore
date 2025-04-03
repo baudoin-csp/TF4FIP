@@ -9,7 +9,10 @@ __pycache__/
 venv/
 /uni2ts
 *.zip
+# Ignore all CSV files
 *.csv
+# But not these ones
+!/analysis/future_data/confidence_interval_analysis/data_2023_2025_chronos_confidence_interval.csv
 *.png
 *.xlsx
 

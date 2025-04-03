@@ -1,4 +1,5 @@
 import argparse
+import ast
 import logging
 import os
 import pickle
@@ -12,7 +13,6 @@ from moirai_model.moirai_prediction import make_prediction as moirai_pred
 from time_moe_model.time_moe_prediction import make_prediction as timemoe_pred
 from transformers import AutoModelForCausalLM
 from uni2ts.model.moirai import MoiraiForecast, MoiraiModule
-import ast
 
 # python -m pipeline --path "../data/data_2023_2025_preprocessed.csv" --input_column "Close_denoised" --output_column "Close" --prediction_length 3 --context_length 384 --frequency "H" --utc True --output "data_2023_2025_final.csv" --model_name "chronos"
 
@@ -43,16 +43,20 @@ def helper_metric(df):
     # We take the first 384 rows as context. We start predicting from the 385th row
     first_predicted_row = context_length_index
     last_predicted_row = len(df) - prediction_length
-    
+
     for index, row in df[first_predicted_row:last_predicted_row].iterrows():
-        base_price = row['Close']
+        base_price = row["Close"]
         if isinstance(row["Result"], str):
             future_predictions = ast.literal_eval(row["Result"])
         else:
             future_predictions = row["Result"]
-        future_prices = df.loc[index:].iloc[1:prediction_length+1]["Close"].tolist() # get the next prediction_length values corresponding to the next prediction_length horizons
+        future_prices = (
+            df.loc[index:].iloc[1 : prediction_length + 1]["Close"].tolist()
+        )  # get the next prediction_length values corresponding to the next prediction_length horizons
         real_difference_signs = [np.sign(price - base_price) for price in future_prices]
-        predicted_difference_signs = [np.sign(prediction - base_price) for prediction in future_predictions]
+        predicted_difference_signs = [
+            np.sign(prediction - base_price) for prediction in future_predictions
+        ]
 
         TP = [0 for _ in range(prediction_length)]
         TN = [0 for _ in range(prediction_length)]
@@ -60,14 +64,29 @@ def helper_metric(df):
         FN = [0 for _ in range(prediction_length)]
 
         # Compute the TP, TN, FP, FN for each horizon
-        for horizon_index, (real_difference_sign, predicted_difference_sign) in enumerate(zip(real_difference_signs, predicted_difference_signs)):
-            if real_difference_sign == predicted_difference_sign and real_difference_sign == 1:
+        for horizon_index, (
+            real_difference_sign,
+            predicted_difference_sign,
+        ) in enumerate(zip(real_difference_signs, predicted_difference_signs)):
+            if (
+                real_difference_sign == predicted_difference_sign
+                and real_difference_sign == 1
+            ):
                 TP[horizon_index] += 1
-            elif real_difference_sign == predicted_difference_sign and real_difference_sign == -1:
+            elif (
+                real_difference_sign == predicted_difference_sign
+                and real_difference_sign == -1
+            ):
                 TN[horizon_index] += 1
-            elif real_difference_sign != predicted_difference_sign and real_difference_sign == 1:
+            elif (
+                real_difference_sign != predicted_difference_sign
+                and real_difference_sign == 1
+            ):
                 FN[horizon_index] += 1
-            elif real_difference_sign != predicted_difference_sign and real_difference_sign == -1:
+            elif (
+                real_difference_sign != predicted_difference_sign
+                and real_difference_sign == -1
+            ):
                 FP[horizon_index] += 1
 
         # fill the column for TP, TN, FP, FN for the current row
@@ -75,9 +94,9 @@ def helper_metric(df):
         df.at[index, "TN"] = str(TN)
         df.at[index, "FP"] = str(FP)
         df.at[index, "FN"] = str(FN)
-        
-   
+
     return df
+
 
 def load_data(file_path, input_column, output_column):
     """Load the data from the CSV file and verify the required columns exist."""
@@ -114,7 +133,6 @@ def sliding_window(df, context_length, prediction_length):
     for start_idx in range(len(df) - context_length - prediction_length + 1):
         context_end = start_idx + context_length  # end of the context window
         pred_end = context_end + prediction_length  # end of the prediction window
-
 
         context_df = df.iloc[start_idx:context_end]
         ground_truth_df = df.iloc[context_end:pred_end]
@@ -222,7 +240,7 @@ def main(args):
             feat_dynamic_real_dim=0,
             past_feat_dynamic_real_dim=0,
         )
-        model = model.to(device) 
+        model = model.to(device)
     elif args.model_name == "chronos":
         model = BaseChronosPipeline.from_pretrained(
             "amazon/chronos-bolt-small",
@@ -237,11 +255,13 @@ def main(args):
 
     # Start predicition in batches
     logging.info("Starting sliding window predictions...")
-    
+
     results = None
     backup_path = "results_backup_incremental.pkl"
     if os.path.exists(backup_path):
-        logging.info("Found backup file. Loading saved results to skip recomputation...")
+        logging.info(
+            "Found backup file. Loading saved results to skip recomputation..."
+        )
         with open(backup_path, "rb") as f:
             results = pickle.load(f)
     else:
@@ -263,16 +283,17 @@ def main(args):
 
         final_predictions = forecast["median"]
         if args.model_name == "chronos":
-            row_dict["std"] = forecast["std"]
-            row_dict["diff_q0_q8"] = forecast["diff_q0_q8"]
-            row_dict["diff_q6_q2"] = forecast["diff_q6_q2"]
-            row_dict["diff_q5_q3"] = forecast["diff_q5_q3"]
+            row_dict["std"] = forecast["std"].tolist()
+            row_dict["diff_q8_q0"] = forecast["diff_q8_q0"].tolist()
+            row_dict["diff_q6_q2"] = forecast["diff_q6_q2"].tolist()
+            row_dict["diff_q5_q3"] = forecast["diff_q5_q3"].tolist()
 
-        
         if isinstance(final_predictions, (np.ndarray, torch.Tensor)):
             final_predictions = final_predictions.tolist()
         else:
-            logging.warning(f"Unexpected type for final_predictions: {type(final_predictions)}")
+            logging.warning(
+                f"Unexpected type for final_predictions: {type(final_predictions)}"
+            )
 
         # Compute APE, SIGN, etc.
         real_values = ground_truth_df[args.output_column].values
@@ -319,9 +340,8 @@ def main(args):
         args.output
         or f"new_results_{args.model_name}_{args.path[:-4]}_{args.context_length}.csv"
     )
-    
-    final_df.to_csv(output_path, index=True)
 
+    final_df.to_csv(output_path, index=True)
 
     logging.info(f"Results saved to {output_path}")
     logging.info("Forecasting process completed.")

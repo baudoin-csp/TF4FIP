@@ -58,7 +58,7 @@ def make_prediction(context_list, model, args):
 
         
         std_forecast_np = forecast_np.std(axis=0) # shape: (prediction_length,)
-        diff_q0_q8 = forecast_np[0] - forecast_np[8] # shape: (prediction_length,). We have the difference between the first and last quantile for H=1, H=2 and H=3
+        diff_q8_q0 = forecast_np[8] - forecast_np[0] # shape: (prediction_length,). We have the difference between the first and last quantile for H=1, H=2 and H=3
         diff_q6_q2 = forecast_np[6] - forecast_np[2]
         diff_q5_q3 = forecast_np[5] - forecast_np[3]
 
@@ -71,7 +71,7 @@ def make_prediction(context_list, model, args):
         if args.return_type == "median":
             final_result = {"median": median, 
                             "std": std_forecast_np,
-                            "diff_q0_q8": diff_q0_q8,
+                            "diff_q8_q0": diff_q8_q0,
                             "diff_q6_q2": diff_q6_q2,
                             "diff_q5_q3": diff_q5_q3}
         else:
