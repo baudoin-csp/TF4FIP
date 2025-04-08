@@ -3,6 +3,8 @@ import argparse
 import pandas as pd
 import yfinance as yf
 
+# python fetchTicker.py --session_start pd.Timestamp("2023-04-07 00:00:00", tz="America/Chicago") --session_end pd.Timestamp("2025-04-07 00:00:00", tz="America/Chicago") --output_path data_2.csv --ticker "ES=F"
+
 
 def fetch(ticker="ES=F", frequency="1h", session_start=None, session_end=None):
 
@@ -41,15 +43,18 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_path",
         type=str,
-        default="data.csv",
+        default="data_es_future.csv",
         help="The name of the destination file.",
     )
     args = parser.parse_args()
 
+    session_start = pd.Timestamp(args.session_start, tz="America/Chicago")
+    session_end = pd.Timestamp(args.session_end, tz="America/Chicago")
+
     df = fetch(
         ticker=args.ticker,
         frequency=args.frequency,
-        session_start=args.session_start,
-        session_end=args.session_end,
+        session_start=session_start,
+        session_end=session_end,
     )
     df.to_csv(args.output_path)
