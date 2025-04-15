@@ -43,7 +43,7 @@ def helper_metric(df):
     
     for index, row in df[first_predicted_row:last_predicted_row].iterrows():
         base_price = row["Close"]
-        future_predictions = ast.literal_eval(row["Result"])
+        future_predictions = row["Result"]
         future_prices = df.loc[index:].iloc[1:prediction_length+1]["Close"].tolist() # get the next prediction_length values corresponding to the next prediction_length horizons
         real_difference_signs = [np.sign(price - base_price) for price in future_prices]
         predicted_difference_signs = [np.sign(prediction - base_price) for prediction in future_predictions]

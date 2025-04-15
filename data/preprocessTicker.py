@@ -46,8 +46,6 @@ def preprocess(df, dfDaily=None):
     df = df.asfreq("h")
     df = df.interpolate(method="time")
 
-   
-
     # Create additional time-based features
     df["Week"] = df.index.isocalendar().week
     df["Day"] = df.index.dayofweek
@@ -102,10 +100,22 @@ def preprocess(df, dfDaily=None):
     df = emroc(df, "Volume", 72, 2)
 
     if dfDaily is not None:
+        # Reset the index so that the current index becomes a column called 'index'
+        dfDaily.reset_index(inplace=True)
+
+        # Rename the resulting column to 'Date'
+        dfDaily.rename(columns={"index": "Date"}, inplace=True)
+
+        # Create a new normalized datetime column based on 'Date'
         dfDaily["Datetime"] = pd.to_datetime(dfDaily["Date"]).dt.normalize()
+
+        # If you no longer need the original 'Date' column, drop it
         dfDaily.drop(["Date"], axis=1, inplace=True)
+
+        # Set the new normalized datetime column as the index
         dfDaily.set_index("Datetime", inplace=True)
 
+        # Set frequency to daily (this will insert missing dates) and interpolate any missing values
         dfDaily = dfDaily.asfreq("D")
         dfDaily = dfDaily.interpolate(method="time")
 
@@ -139,10 +149,17 @@ def preprocess(df, dfDaily=None):
             sys.stdout.flush()
 
         while row_idx < len(df):
-            if row_idx >= curr * step:
-                progress_bar(curr, 100)
-                curr += 1
+            if rowDaily_idx >= len(dfDaily):
+                last_daily = dfDaily.iloc[-1]
+                df.loc[
+                    df.index[row_idx:],
+                    ["ATR_10", "MM_20", "MM_60", "EMM_20", "EMM_60", "RSI"],
+                ] = last_daily[
+                    ["ATR_10", "MM_20", "MM_60", "EMM_20", "EMM_60", "RSI"]
+                ].values
+                break
 
+            # Check if the current hourly row should take values from the current daily row.
             if (
                 df.index[row_idx].dayofweek == dfDaily.index[rowDaily_idx].dayofweek
                 and df.index[row_idx].hour >= 17
@@ -151,7 +168,7 @@ def preprocess(df, dfDaily=None):
                 == dfDaily.index[rowDaily_idx].dayofweek
                 and df.index[row_idx].hour < 17
             ):
-                # Set values for columns VolumeDiff, CloseDiff, ATR10, MM20, MM60 using .loc
+                # Assign values from the current daily row into the corresponding hourly row.
                 df.loc[df.index[row_idx], "ATR_10"] = dfDaily.loc[
                     dfDaily.index[rowDaily_idx], "ATR_10"
                 ]
@@ -174,6 +191,7 @@ def preprocess(df, dfDaily=None):
                 row_idx += 1
             else:
                 rowDaily_idx += 1
+
         progress_bar(curr, 100)
         df["DistanceToMM20"] = ((df["Close"] - df["MM_20"]) / df["MM_20"]) * 100
         df["DistanceToMM60"] = ((df["Close"] - df["MM_60"]) / df["MM_60"]) * 100
@@ -181,7 +199,6 @@ def preprocess(df, dfDaily=None):
         df["DistanceToEMM60"] = ((df["Close"] - df["EMM_60"]) / df["EMM_60"]) * 100
 
         df["Close_denoised"] = wavelet_denoise(df.copy())["Close"]
-        df = df.tail(-max(df.isna().sum()))
         return df
     else:
         df["Close_denoised"] = wavelet_denoise(df.copy())["Close"]

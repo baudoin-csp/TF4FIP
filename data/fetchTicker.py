@@ -16,8 +16,9 @@ def fetch(ticker="ES=F", frequency="1h", session_start=None, session_end=None):
         end=session_end,
         prepost=True,
     )
-
-    data.index = data.index.tz_convert("America/Chicago")
+    if frequency == "1h":
+        data.index = data.index.tz_convert("America/Chicago")
+        
     data.columns = data.columns.droplevel("Ticker")
     # Reset index to obtain index values instead of only dates
     data.reset_index(inplace=True)
