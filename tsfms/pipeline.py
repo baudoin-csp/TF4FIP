@@ -34,30 +34,34 @@ def helper_metric(df):
     context_length_index = context_length - 1
     prediction_length = 3
 
-    df["Correct"] = 0
-    df["Incorrect"] = 0
-
     # We take the first 384 rows as context. We start predicting from the 385th row
     first_predicted_row = context_length_index
     last_predicted_row = len(df) - prediction_length
-    
+
     for index, row in df[first_predicted_row:last_predicted_row].iterrows():
         base_price = row["Close"]
         future_predictions = row["Result"]
-        future_prices = df.loc[index:].iloc[1:prediction_length+1]["Close"].tolist() # get the next prediction_length values corresponding to the next prediction_length horizons
+        future_prices = (
+            df.loc[index:].iloc[1 : prediction_length + 1]["Close"].tolist()
+        )  # get the next prediction_length values corresponding to the next prediction_length horizons
         real_difference_signs = [np.sign(price - base_price) for price in future_prices]
-        predicted_difference_signs = [np.sign(prediction - base_price) for prediction in future_predictions]
+        predicted_difference_signs = [
+            np.sign(prediction - base_price) for prediction in future_predictions
+        ]
 
         CORRECT = [0 for _ in range(prediction_length)]
         INCORRECT = [0 for _ in range(prediction_length)]
 
         # Compute the CORRECT, INCORRECT for each horizon
-        for horizon_index, (real_difference_sign, predicted_difference_sign) in enumerate(zip(real_difference_signs, predicted_difference_signs)):
+        for horizon_index, (
+            real_difference_sign,
+            predicted_difference_sign,
+        ) in enumerate(zip(real_difference_signs, predicted_difference_signs)):
             if real_difference_sign == predicted_difference_sign:
                 CORRECT[horizon_index] = 1
             else:
                 INCORRECT[horizon_index] = 1
-        
+
         # fill the column for CORRECT, INCORRECT for the current row
         df.at[index, "CORRECT"] = str(CORRECT)
         df.at[index, "INCORRECT"] = str(INCORRECT)
@@ -245,8 +249,8 @@ def main(args):
     all_results = []
     for context_df, ground_truth_df, forecast, idx in results:
         row_dict = {}
-        if "median" in forecast: # only for chronos
-                final_predictions = forecast["median"]
+        if "median" in forecast:  # only for chronos
+            final_predictions = forecast["median"]
         else:
             final_predictions = forecast
 
